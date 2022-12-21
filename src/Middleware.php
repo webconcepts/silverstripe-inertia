@@ -2,15 +2,38 @@
 
 namespace Inertia;
 
-use SilverStripe\Control\Middleware\HTTPMiddleware;
 use SilverStripe\Control\Cookie;
 use SilverStripe\Control\Director;
 use SilverStripe\Control\HTTPRequest;
+use SilverStripe\Control\HTTPResponse;
 use SilverStripe\Security\SecurityToken;
 use SilverStripe\Forms\Schema\FormSchema;
+use SilverStripe\Core\Config\Configurable;
+use SilverStripe\Control\Middleware\HTTPMiddleware;
+use SilverStripe\Core\Manifest\ModuleResourceLoader;
 
 class Middleware implements HTTPMiddleware
 {
+    use Configurable;
+
+    private static $app_bundle_resource;
+
+    /**
+     * Determines the current asset version.
+     *
+     * @see https://inertiajs.com/asset-versioning
+     */
+    public function version(HTTPRequest $request)
+    {
+        $resource = static::config()->app_bundle_resource;
+
+        if ($resource && $path = ModuleResourceLoader::resourcePath($resource)) {
+            return filemtime(Director::getAbsFile($path));
+        }
+
+        return null;
+    }
+
     /**
      * Define the props that are shared by default
      *
@@ -27,6 +50,10 @@ class Middleware implements HTTPMiddleware
 
     public function process(HTTPRequest $request, callable $delegate)
     {
+        Inertia::version(function () use ($request) {
+            return $this->version($request);
+        });
+
         Inertia::share($this->share($request));
 
         $securityToken = SecurityToken::inst();
@@ -40,21 +67,34 @@ class Middleware implements HTTPMiddleware
         }
 
         $response = $delegate($request);
+        $response->addHeader('Vary', 'X-Inertia');
 
         if ($securityToken->isEnabled() && !headers_sent() && !Director::is_cli()) {
             $this->setXsrfTokenCookieForAxios();
         }
 
-        // If we have no X-Inertia header continue
         if (!$request->getHeader('X-Inertia')) {
             return $response;
         }
 
-        $response->addHeader('Vary', 'Accept');
-        $response->addHeader('X-Inertia', 'true');
+        if ($request->httpMethod() === 'GET' && $request->getHeader('X-Inertia-Version', '') !== Inertia::getVersion()) {
+            $response = $this->onVersionChange($request, $response);
+        }
+
 
         // Don't forget to the return the response!
         return $response;
+    }
+
+    /**
+     * Determines what to do when the Inertia asset version has changed.
+     * By default, we'll initiate a client-side location visit to force an update.
+     */
+    public function onVersionChange(HTTPRequest $request, HTTPResponse $response): HTTPResponse
+    {
+        return Inertia::location(
+            Director::absoluteURL($request->getURL(true))
+        );
     }
 
     /**
