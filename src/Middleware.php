@@ -18,6 +18,10 @@ class Middleware implements HTTPMiddleware
             $this->addXsrfTokenFromAxiosToRequest($request);
         }
 
+        if ($request->getHeader('X-Inertia')) {
+            $request = Request::createFrom($request);
+        }
+
         $response = $delegate($request);
 
         if ($securityToken->isEnabled() && !headers_sent() && !Director::is_cli()) {
