@@ -2,9 +2,12 @@
 
 namespace Inertia;
 
+use Closure;
+use JsonSerializable;
+use SilverStripe\ORM\SS_List;
+use SilverStripe\ORM\DataObject;
 use SilverStripe\Control\Controller;
 use SilverStripe\Control\HTTPResponse;
-use SilverStripe\ORM\SS_List;
 
 class Response
 {
@@ -21,7 +24,7 @@ class Response
     public function __construct($component, $props, $rootTemplate = null, $version = null)
     {
         $this->component = $component;
-        $this->props = $props instanceof SS_List ? $props->toArray() : $props;
+        $this->props = $props;
         $this->rootTemplate = $rootTemplate;
         $this->version = $version;
     }
@@ -63,9 +66,7 @@ class Response
             ? Helpers::arrayOnly($this->props, $only)
             : $this->props;
 
-        array_walk_recursive($props, static function (&$prop) {
-            $prop = Helpers::closureCall($prop);
-        });
+        $props = $this->resolvePropertyValues($props);
 
         $page = [
             'component' => $this->component,
@@ -97,5 +98,35 @@ class Response
     {
         $controller = Controller::curr();
         return $controller->getRequest();
+            }
+
+    protected function resolvePropertyValues(array $props)
+    {
+        foreach ($props as $key => $value) {
+            if ($value instanceof Closure) {
+                $value = $value();
+        }
+
+            if ($value instanceof JsonSerializable) {
+                $props[$key] = $value;
+                continue;
+    }
+
+            if ($value instanceof DataObject) {
+                $value = $value->toMap();
+            }
+
+            if ($value instanceof SS_List) {
+                $value = $value->toArray();
+            }
+
+            if (is_array($value)) {
+                $value = $this->resolvePropertyValues($value);
+            }
+
+            $props[$key] = $value;
+        }
+
+        return $props;
     }
 }
