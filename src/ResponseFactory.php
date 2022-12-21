@@ -8,15 +8,15 @@ use SilverStripe\ORM\SS_List;
 
 class ResponseFactory
 {
-    protected $rootView = 'Page';
+    protected $rootTemplate;
 
     protected $sharedProps = [];
 
     protected $version = null;
 
-    public function setRootView($name)
+    public function setRootTemplate($template)
     {
-        $this->rootView = $name;
+        $this->rootTemplate = $template;
     }
 
     public function share($key, $value = null)
@@ -72,7 +72,7 @@ class ResponseFactory
         $response = new Response(
             $component,
             array_merge($this->sharedProps, $props),
-            $this->rootView,
+            $this->rootTemplate,
             $this->getVersion()
         );
 

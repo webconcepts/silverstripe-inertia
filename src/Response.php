@@ -12,17 +12,17 @@ class Response
 
     protected $props;
 
-    protected $rootView;
+    protected $rootTemplate;
 
     protected $version;
 
     protected $viewData = [];
 
-    public function __construct($component, $props, $rootView = 'Page', $version = null)
+    public function __construct($component, $props, $rootTemplate = null, $version = null)
     {
         $this->component = $component;
         $this->props = $props instanceof SS_List ? $props->toArray() : $props;
-        $this->rootView = $rootView;
+        $this->rootTemplate = $rootTemplate;
         $this->version = $version;
     }
 
@@ -83,7 +83,11 @@ class Response
             return $response;
         } else {
             $controller = Controller::curr();
-            $processed = $controller->renderWith($this->rootView, $this->viewData + ['page' => $page, 'pageJson' => $json]);
+            if ($this->rootTemplate) {
+                $processed = $controller->renderWith($this->rootTemplate, $this->viewData + ['page' => $page, 'pageJson' => $json]);
+            } else {
+                $processed = $controller->render($this->viewData + ['page' => $page, 'pageJson' => $json]);
+            }
             $response->setBody($processed);
             return $response;
         }
