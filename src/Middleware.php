@@ -7,11 +7,28 @@ use SilverStripe\Control\Cookie;
 use SilverStripe\Control\Director;
 use SilverStripe\Control\HTTPRequest;
 use SilverStripe\Security\SecurityToken;
+use SilverStripe\Forms\Schema\FormSchema;
 
 class Middleware implements HTTPMiddleware
 {
+    /**
+     * Define the props that are shared by default
+     *
+     * @see https://inertiajs.com/shared-data
+     */
+    public function share(HTTPRequest $request)
+    {
+        return [
+            'errors' => function () use ($request) {
+                return $this->resolveValidationErrors($request);
+            },
+        ];
+    }
+
     public function process(HTTPRequest $request, callable $delegate)
     {
+        Inertia::share($this->share($request));
+
         $securityToken = SecurityToken::inst();
 
         if ($securityToken->isEnabled() && $request->getHeader('X-XSRF-TOKEN')) {
@@ -63,5 +80,29 @@ class Middleware implements HTTPMiddleware
             value: SecurityToken::inst()->getValue(),
             httpOnly: false
         );
+    }
+
+    protected function resolveValidationErrors(HTTPRequest $request): object
+    {
+        $formInfo = $request->hasSession() ? $request->getSession()->get('FormInfo') : [];
+        $errors = [];
+
+        foreach ((array) $formInfo as $formName => $data) {
+            if (empty($data['result'])) {
+                continue;
+            }
+
+            foreach ((new FormSchema())->getErrors(unserialize($data['result'])) as $error) {
+                if (!empty($error['field']) && !empty($error['value'])) {
+                    $errors[$error['field']] = $error['value'];
+                }
+            }
+        }
+
+        if ($request->getHeader('x-inertia-error-bag') && !empty($errors)) {
+            return (object) [$request->header('x-inertia-error-bag') => $errors];
+        }
+
+        return (object) $errors;
     }
 }

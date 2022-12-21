@@ -2,19 +2,14 @@
 
 namespace Inertia;
 
+use SilverStripe\Core\Injector\Injector;
 use SilverStripe\View\TemplateGlobalProvider;
 
 class Inertia implements TemplateGlobalProvider
 {
-    public static function render($component = null, $props = [])
+    public static function __callStatic($method, $args)
     {
-        $inertia = new ResponseFactory();
-
-        if ($component) {
-            return $inertia->render($component, $props);
-        }
-
-        return $inertia;
+        return Injector::inst()->get(ResponseFactory::class)->$method(...$args);
     }
 
     public static function renderApp($pageJson)
