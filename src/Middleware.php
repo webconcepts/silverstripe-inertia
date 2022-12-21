@@ -4,6 +4,7 @@ namespace Inertia;
 
 use SilverStripe\Control\Cookie;
 use SilverStripe\Control\Director;
+use SilverStripe\Control\Controller;
 use SilverStripe\Control\HTTPRequest;
 use SilverStripe\Control\HTTPResponse;
 use SilverStripe\Security\SecurityToken;
@@ -81,9 +82,24 @@ class Middleware implements HTTPMiddleware
             $response = $this->onVersionChange($request, $response);
         }
 
+        if ($response->getStatusCode() === 200 && empty($response->getBody())) {
+            $response = $this->onEmptyResponse($request, $response);
+        }
 
-        // Don't forget to the return the response!
+        if ($response->getStatusCode() === 302 && in_array($request->httpMethod(), ['PUT', 'PATCH', 'DELETE'])) {
+            $response->setStatusCode(303);
+        }
+
         return $response;
+    }
+
+    /**
+     * Determines what to do when an Inertia action returned with no response.
+     * By default, we'll redirect the user back to where they came from.
+     */
+    public function onEmptyResponse(HTTPRequest $request, HTTPResponse $response): HTTPResponse
+    {
+        return Controller::curr()->redirectBack();
     }
 
     /**
