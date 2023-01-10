@@ -56,15 +56,15 @@ class Response
     public function toResponse()
     {
         $request = $this->request();
-        $partialData = $request->getHeader('X-Inertia-Partial-Data');
-        $only = array_filter(
-            explode(',', $partialData ? $partialData->getValue() : '')
-        );
+        $partialData = $request->getHeader('X-Inertia-Partial-Data') ?? '';
+        $only = array_filter(explode(',', $partialData));
 
-        $partialComponent = $request->getHeader('X-Inertia-Partial-Component');
-        $props = ($only && ($partialComponent ? $partialComponent->getValue() : '') === $this->component)
+        $partialComponent = $request->getHeader('X-Inertia-Partial-Component') ?? '';
+        $props = ($only && $partialComponent === $this->component)
             ? Helpers::arrayOnly($this->props, $only)
-            : $this->props;
+            : array_filter($this->props, static function ($prop) {
+                return ! ($prop instanceof LazyProp);
+            });
 
         $props = $this->resolvePropertyValues($props);
 
@@ -80,7 +80,7 @@ class Response
         if ($request->getHeader('X-Inertia')) {
             $response->setBody($json);
             $response->addHeader('Vary', 'Accept');
-            $response->addHeader('X-Inertia','true');
+            $response->addHeader('X-Inertia', 'true');
             return $response;
         } else {
             $controller = Controller::curr();
@@ -98,19 +98,19 @@ class Response
     {
         $controller = Controller::curr();
         return $controller->getRequest();
-            }
+    }
 
     protected function resolvePropertyValues(array $props)
     {
         foreach ($props as $key => $value) {
-            if ($value instanceof Closure) {
+            if ($value instanceof Closure || $value instanceof LazyProp) {
                 $value = $value();
-        }
+            }
 
             if ($value instanceof JsonSerializable) {
                 $props[$key] = $value;
                 continue;
-    }
+            }
 
             if ($value instanceof DataObject) {
                 $value = $value->toMap();
